@@ -7,7 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:3001/api'; // Update this with your actual backend URL
+const API_BASE_URL = 'http://localhost:3001/api';
 
 const InscriptionService = () => {
   const [address, setAddress] = useState('');
@@ -15,11 +15,21 @@ const InscriptionService = () => {
   const [data, setData] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
+  const [wallet, setWallet] = useState(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchWalletBalance();
+    const storedWallet = localStorage.getItem('dogecoinWallet');
+    if (storedWallet) {
+      setWallet(JSON.parse(storedWallet));
+    }
   }, []);
+
+  useEffect(() => {
+    if (wallet) {
+      fetchWalletBalance();
+    }
+  }, [wallet]);
 
   const fetchWalletBalance = async () => {
     try {
@@ -30,11 +40,41 @@ const InscriptionService = () => {
     }
   };
 
+  const handleCreateWallet = async () => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/wallet/new`);
+      if (response.data.success) {
+        const newWallet = response.data.wallet;
+        setWallet(newWallet);
+        localStorage.setItem('dogecoinWallet', JSON.stringify(newWallet));
+        toast({
+          title: "Wallet Created",
+          description: `Your new wallet address: ${newWallet.address}`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Wallet Creation Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleInscribe = async () => {
+    if (!wallet) {
+      toast({
+        title: "No Wallet",
+        description: "Please create a wallet first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
       const response = await axios.post(`${API_BASE_URL}/inscribe`, {
-        address,
+        address: wallet.address,
         contentType,
         data: Buffer.from(data).toString('hex')
       });
@@ -44,7 +84,7 @@ const InscriptionService = () => {
           title: "Inscription Successful",
           description: `Your data has been inscribed. TXID: ${response.data.txid}`,
         });
-        fetchWalletBalance(); // Refresh balance after inscription
+        fetchWalletBalance();
       } else {
         throw new Error(response.data.error);
       }
@@ -68,19 +108,17 @@ const InscriptionService = () => {
           This service allows you to inscribe data on the Dogecoin network. Please ensure you understand the process and fees involved.
         </AlertDescription>
       </Alert>
-      <div className="mb-4">
-        <p>Wallet Balance: {walletBalance} satoshis</p>
-      </div>
-      <div className="space-y-4">
-        <div>
-          <Label htmlFor="address">Dogecoin Address</Label>
-          <Input
-            id="address"
-            placeholder="Enter your Dogecoin address"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-          />
+      {!wallet ? (
+        <div className="mb-4">
+          <Button onClick={handleCreateWallet}>Create New Wallet</Button>
         </div>
+      ) : (
+        <div className="mb-4">
+          <p>Wallet Address: {wallet.address}</p>
+          <p>Wallet Balance: {walletBalance} satoshis</p>
+        </div>
+      )}
+      <div className="space-y-4">
         <div>
           <Label htmlFor="contentType">Content Type</Label>
           <Input
@@ -99,7 +137,7 @@ const InscriptionService = () => {
             onChange={(e) => setData(e.target.value)}
           />
         </div>
-        <Button onClick={handleInscribe} disabled={isLoading}>
+        <Button onClick={handleInscribe} disabled={isLoading || !wallet}>
           {isLoading ? 'Inscribing...' : 'Inscribe Data'}
         </Button>
       </div>
