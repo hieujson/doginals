@@ -52,23 +52,87 @@ function opcodeToChunk(op) {
 }
 
 function inscribe(wallet, address, contentType, data) {
-    // ... (existing inscribe function code)
+    let chunks = [
+        bufferToChunk('ord'),
+        numberToChunk(1),
+        bufferToChunk(contentType),
+        numberToChunk(0),
+        bufferToChunk(data)
+    ];
+
+    let script = new Script();
+    for (let chunk of chunks) {
+        if (chunk.buf) {
+            script.add(chunk.buf);
+        } else if (chunk.opcodenum) {
+            script.add(Opcode(chunk.opcodenum));
+        }
+    }
+
+    let tx = new Transaction()
+        .from(wallet.utxos)
+        .addOutput(new Transaction.Output({
+            script: script,
+            satoshis: 1000
+        }))
+        .change(address)
+        .sign(wallet.privkey);
+
+    return [tx];
 }
 
-function fund(wallet, tx) {
-    // ... (existing fund function code)
+async function fund(wallet, tx) {
+    let balance = wallet.utxos.reduce((a, b) => a + b.satoshis, 0);
+    let needed = tx.outputAmount + tx._estimateFee();
+    if (balance < needed) {
+        throw new Error(`Insufficient balance. Have ${balance}, need ${needed}`);
+    }
+    tx.from(wallet.utxos);
+    tx.change(wallet.address);
+    tx.sign(wallet.privkey);
 }
 
 function updateWallet(wallet, tx) {
-    // ... (existing updateWallet function code)
+    wallet.utxos = wallet.utxos.filter(utxo => !tx.inputs.some(input => input.prevTxId.toString('hex') === utxo.txid && input.outputIndex === utxo.vout));
+    tx.outputs.forEach((output, index) => {
+        if (output.script.toAddress().toString() === wallet.address) {
+            wallet.utxos.push({
+                txid: tx.hash,
+                vout: index,
+                address: wallet.address,
+                script: output.script.toHex(),
+                satoshis: output.satoshis
+            });
+        }
+    });
 }
 
 async function broadcast(tx, retry) {
-    // ... (existing broadcast function code)
+    let res = await axios.post('https://api.blockcypher.com/v1/doge/main/txs/push', {
+        tx: tx.serialize()
+    });
+    if (res.data.tx && res.data.tx.hash) {
+        return res.data.tx.hash;
+    } else {
+        throw new Error('Failed to broadcast transaction');
+    }
 }
 
 async function walletSync() {
-    // ... (existing walletSync function code)
+    let wallet = JSON.parse(fs.readFileSync(WALLET_PATH));
+    let res = await axios.get(`https://api.blockcypher.com/v1/doge/main/addrs/${wallet.address}/full?unspentOnly=true`);
+    wallet.utxos = res.data.txs.flatMap(tx => tx.outputs
+        .filter(output => output.addresses[0] === wallet.address)
+        .map(output => ({
+            txid: tx.hash,
+            vout: output.n,
+            address: wallet.address,
+            script: output.script,
+            satoshis: output.value
+        }))
+    );
+    fs.writeFileSync(WALLET_PATH, JSON.stringify(wallet));
+    return wallet.utxos.reduce((a, b) => a + b.satoshis, 0);
 }
 
 app.post('/api/inscribe', async (req, res) => {
@@ -101,10 +165,12 @@ app.post('/api/wallet/send', async (req, res) => {
         
         let tx = new Transaction();
         tx.to(new Address(address), parseInt(amount));
-        fund(wallet, tx);
+        await fund(wallet, tx);
         
-        await broadcast(tx, true);
-        res.json({ success: true, txid: tx.hash });
+        const txid = await broadcast(tx, true);
+        updateWallet(wallet, tx);
+        fs.writeFileSync(WALLET_PATH, JSON.stringify(wallet));
+        res.json({ success: true, txid });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -133,9 +199,12 @@ app.post('/api/wallet/import', (req, res) => {
             const address = importedPrivateKey.toAddress().toString();
             wallet = { privkey, address, utxos: [] };
         } else if (seedPhrase) {
-            // Implement seed phrase import logic here
-            // This is a placeholder and should be replaced with actual implementation
-            throw new Error('Seed phrase import not implemented');
+            // Implement BIP39 for seed phrase
+            const hdPrivateKey = dogecore.HDPrivateKey.fromSeed(seedPhrase);
+            const derived = hdPrivateKey.derive("m/44'/3'/0'/0/0");
+            const privkey = derived.privateKey.toWIF();
+            const address = derived.privateKey.toAddress().toString();
+            wallet = { privkey, address, utxos: [] };
         } else {
             throw new Error('Either private key or seed phrase is required');
         }
