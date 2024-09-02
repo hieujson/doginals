@@ -5,12 +5,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loader2 } from "lucide-react";
 import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:3001/api';
 
 const InscriptionService = () => {
-  const [address, setAddress] = useState('');
   const [contentType, setContentType] = useState('');
   const [data, setData] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -40,32 +41,11 @@ const InscriptionService = () => {
     }
   };
 
-  const handleCreateWallet = async () => {
-    try {
-      const response = await axios.post(`${API_BASE_URL}/wallet/new`);
-      if (response.data.success) {
-        const newWallet = response.data.wallet;
-        setWallet(newWallet);
-        localStorage.setItem('dogecoinWallet', JSON.stringify(newWallet));
-        toast({
-          title: "Wallet Created",
-          description: `Your new wallet address: ${newWallet.address}`,
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Wallet Creation Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleInscribe = async () => {
     if (!wallet) {
       toast({
         title: "No Wallet",
-        description: "Please create a wallet first.",
+        description: "Please connect a wallet first.",
         variant: "destructive",
       });
       return;
@@ -100,47 +80,72 @@ const InscriptionService = () => {
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Dogecoin Inscription Service</h1>
-      <Alert className="mb-4">
-        <AlertTitle>Important</AlertTitle>
-        <AlertDescription>
-          This service allows you to inscribe data on the Dogecoin network. Please ensure you understand the process and fees involved.
-        </AlertDescription>
-      </Alert>
-      {!wallet ? (
-        <div className="mb-4">
-          <Button onClick={handleCreateWallet}>Create New Wallet</Button>
-        </div>
-      ) : (
-        <div className="mb-4">
-          <p>Wallet Address: {wallet.address}</p>
-          <p>Wallet Balance: {walletBalance} satoshis</p>
-        </div>
-      )}
-      <div className="space-y-4">
-        <div>
-          <Label htmlFor="contentType">Content Type</Label>
-          <Input
-            id="contentType"
-            placeholder="e.g., text/plain, image/png"
-            value={contentType}
-            onChange={(e) => setContentType(e.target.value)}
-          />
-        </div>
-        <div>
-          <Label htmlFor="data">Data to Inscribe</Label>
-          <Textarea
-            id="data"
-            placeholder="Enter the data you want to inscribe"
-            value={data}
-            onChange={(e) => setData(e.target.value)}
-          />
-        </div>
-        <Button onClick={handleInscribe} disabled={isLoading || !wallet}>
-          {isLoading ? 'Inscribing...' : 'Inscribe Data'}
-        </Button>
-      </div>
+    <div className="container mx-auto p-4 max-w-2xl">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold">Dogecoin Inscription Service</CardTitle>
+          <CardDescription>Inscribe your data on the Dogecoin network</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert className="mb-6">
+            <AlertTitle>Important</AlertTitle>
+            <AlertDescription>
+              This service allows you to inscribe data on the Dogecoin network. Please ensure you understand the process and fees involved.
+            </AlertDescription>
+          </Alert>
+          
+          {wallet ? (
+            <div className="mb-6 p-4 bg-gray-100 rounded-lg">
+              <p className="font-semibold">Connected Wallet</p>
+              <p className="text-sm text-gray-600 break-all">{wallet.address}</p>
+              <p className="mt-2">Balance: {walletBalance} satoshis</p>
+            </div>
+          ) : (
+            <Alert variant="destructive" className="mb-6">
+              <AlertTitle>No Wallet Connected</AlertTitle>
+              <AlertDescription>
+                Please connect a wallet using the button in the top right corner before inscribing.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="contentType">Content Type</Label>
+              <Input
+                id="contentType"
+                placeholder="e.g., text/plain, image/png"
+                value={contentType}
+                onChange={(e) => setContentType(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="data">Data to Inscribe</Label>
+              <Textarea
+                id="data"
+                placeholder="Enter the data you want to inscribe"
+                value={data}
+                onChange={(e) => setData(e.target.value)}
+                rows={5}
+              />
+            </div>
+            <Button 
+              onClick={handleInscribe} 
+              disabled={isLoading || !wallet} 
+              className="w-full"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Inscribing...
+                </>
+              ) : (
+                'Inscribe Data'
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
