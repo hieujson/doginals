@@ -1,28 +1,53 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:3001/api'; // Update this with your actual backend URL
 
 const InscriptionService = () => {
   const [address, setAddress] = useState('');
   const [contentType, setContentType] = useState('');
   const [data, setData] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(0);
   const { toast } = useToast();
+
+  useEffect(() => {
+    fetchWalletBalance();
+  }, []);
+
+  const fetchWalletBalance = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/wallet/balance`);
+      setWalletBalance(response.data.balance);
+    } catch (error) {
+      console.error('Error fetching wallet balance:', error);
+    }
+  };
 
   const handleInscribe = async () => {
     setIsLoading(true);
     try {
-      // Here you would integrate with your backend to perform the inscription
-      // For now, we'll just simulate the process
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      toast({
-        title: "Inscription Successful",
-        description: "Your data has been inscribed on the Dogecoin network.",
+      const response = await axios.post(`${API_BASE_URL}/inscribe`, {
+        address,
+        contentType,
+        data: Buffer.from(data).toString('hex')
       });
+      
+      if (response.data.success) {
+        toast({
+          title: "Inscription Successful",
+          description: `Your data has been inscribed. TXID: ${response.data.txid}`,
+        });
+        fetchWalletBalance(); // Refresh balance after inscription
+      } else {
+        throw new Error(response.data.error);
+      }
     } catch (error) {
       toast({
         title: "Inscription Failed",
@@ -43,6 +68,9 @@ const InscriptionService = () => {
           This service allows you to inscribe data on the Dogecoin network. Please ensure you understand the process and fees involved.
         </AlertDescription>
       </Alert>
+      <div className="mb-4">
+        <p>Wallet Balance: {walletBalance} satoshis</p>
+      </div>
       <div className="space-y-4">
         <div>
           <Label htmlFor="address">Dogecoin Address</Label>
