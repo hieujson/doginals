@@ -122,6 +122,30 @@ app.post('/api/wallet/new', (req, res) => {
     }
 });
 
+app.post('/api/wallet/import', (req, res) => {
+    try {
+        const { privateKey, seedPhrase } = req.body;
+        let wallet;
+
+        if (privateKey) {
+            const importedPrivateKey = new PrivateKey(privateKey);
+            const privkey = importedPrivateKey.toWIF();
+            const address = importedPrivateKey.toAddress().toString();
+            wallet = { privkey, address, utxos: [] };
+        } else if (seedPhrase) {
+            // Implement seed phrase import logic here
+            // This is a placeholder and should be replaced with actual implementation
+            throw new Error('Seed phrase import not implemented');
+        } else {
+            throw new Error('Either private key or seed phrase is required');
+        }
+
+        res.json({ success: true, wallet });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
